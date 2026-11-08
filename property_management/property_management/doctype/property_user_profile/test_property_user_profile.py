@@ -104,6 +104,21 @@ class TestPropertyUserProfile(IntegrationTestCase):
 		frappe.local.form_dict = frappe._dict(new_password="a-different-pass-1")
 		user.validate_reset_password()
 
+	def test_password_page_loads_controller_and_desk_home(self):
+		"""Frappe loads www/property-password.html from www/property_password.py, not the hyphenated filename."""
+		from frappe.website.page_renderers.template_page import TemplatePage
+
+		page = TemplatePage("property-password")
+		page.init_context()
+		page.set_pymodule()
+		self.assertEqual(page.pymodule_name, "property_management.www.property_password")
+
+		frappe.set_user("Administrator")
+		created = make_property_user()
+		frappe.set_user(created["user"])
+		page.update_context()
+		self.assertEqual(page.context.desk_home, DESK_HOME)
+
 	def test_on_login_opens_property_desk(self):
 		frappe.set_user("Administrator")
 		created = make_property_user()

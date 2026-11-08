@@ -33,6 +33,7 @@ doc_events = {
 }
 
 permission_query_conditions = {
+	"User": "property_management.permissions.query_user",
 	"Property User Profile": "property_management.permissions.query_property_user_profile",
 	"Building": "property_management.permissions.query_building",
 	"Flat": "property_management.permissions.query_flat",
@@ -52,6 +53,7 @@ permission_query_conditions = {
 }
 
 has_permission = {
+	"User": "property_management.permissions.has_user_permission",
 	"Property User Profile": "property_management.permissions.has_permission",
 	"Building": "property_management.permissions.has_permission",
 	"Flat": "property_management.permissions.has_permission",
@@ -68,6 +70,10 @@ has_permission = {
 	"Property Expense": "property_management.permissions.has_permission",
 	"Monthly Revenue": "property_management.permissions.has_permission",
 	"Rent Billing Log": "property_management.permissions.has_permission",
+}
+
+standard_queries = {
+	"User": "property_management.permissions.user_query",
 }
 
 scheduler_events = {
@@ -87,7 +93,14 @@ add_to_apps_screen = [
 ]
 
 app_include_css = "/assets/property_management/css/desk.css"
-app_include_js = "/assets/property_management/js/password_gate.js"
+app_include_js = "/assets/property_management/js/password_gate.js?v=20261108d"
+
+fixtures = [
+	{
+		"doctype": "Property Setter",
+		"filters": [["name", "in", ["User-main-show_title_field_in_link"]]],
+	}
+]
 web_include_js = "/assets/property_management/js/login.js"
 
 doctype_js = {

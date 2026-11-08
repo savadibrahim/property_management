@@ -4,7 +4,7 @@ frappe.pages["super-admin-panel"].on_page_load = function (wrapper) {
 		title: __("Super Admin Panel"),
 		single_column: true,
 	});
-	frappe.require("/assets/property_management/js/desk_pages.js").then(() => {
+	frappe.require("/assets/property_management/js/desk_pages.js?v=20261108c").then(() => {
 		property_management.desk.mount(page, "super-admin");
 	});
 };

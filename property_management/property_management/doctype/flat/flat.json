@@ -1,6 +1,6 @@
 {
  "actions": [],
- "autoname": "format:FLT-{#####}",
+ "autoname": "",
  "creation": "2026-11-06 00:00:00",
  "description": "A flat under one building. Bed and area counts are maintained from child records.",
  "doctype": "DocType",
@@ -103,7 +103,7 @@
  "modified": "2026-11-06 00:00:00.000000",
  "module": "Property Management",
  "name": "Flat",
- "naming_rule": "Expression",
+ "naming_rule": "By script",
  "owner": "Administrator",
  "permissions": [
   {
@@ -145,6 +145,6 @@
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "title_field": "flat_number",
+ "title_field": "",
  "track_changes": 1
 }

@@ -134,3 +134,41 @@ def query_monthly_revenue(user=None):
 
 def query_rent_billing_log(user=None):
 	return permission_query_conditions(user, "Rent Billing Log")
+
+
+def query_user(user=None, doctype="User"):
+	"""Restrict User queries so a Property User only ever sees their own User record."""
+	user = user or frappe.session.user
+	if is_privileged(user):
+		return None
+	if not is_property_user(user):
+		return "1=0"
+	return f"`tabUser`.`name` = {frappe.db.escape(user)}"
+
+
+def has_user_permission(doc, ptype=None, user=None, debug=False):
+	"""Prevent a Property User from reading or selecting another User record."""
+	user = user or frappe.session.user
+	if is_privileged(user):
+		return True
+	if not is_property_user(user):
+		return False
+	doc_name = doc.name if hasattr(doc, "name") else doc
+	return doc_name == user
+
+
+@frappe.whitelist()
+@frappe.validate_and_sanitize_search_inputs
+def user_query(doctype, txt, searchfield, start, page_len, filters):
+	"""Standard link query for User. Pins non-privileged Property Users to their own account."""
+	from frappe.core.doctype.user.user import user_query as core_user_query
+
+	user = frappe.session.user
+	if not is_privileged(user):
+		if not is_property_user(user):
+			return []
+		filters = dict(filters or {})
+		filters["name"] = user
+
+	return core_user_query(doctype, txt, searchfield, start, page_len, filters)
+

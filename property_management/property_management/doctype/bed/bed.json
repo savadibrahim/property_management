@@ -1,6 +1,6 @@
 {
  "actions": [],
- "autoname": "format:BED-{#####}",
+ "autoname": "",
  "creation": "2026-11-06 00:00:00",
  "description": "A bed in an area. Occupancy changes when a tenant is allocated or vacated.",
  "doctype": "DocType",
@@ -117,7 +117,7 @@
  "modified": "2026-11-06 00:00:00.000000",
  "module": "Property Management",
  "name": "Bed",
- "naming_rule": "Expression",
+ "naming_rule": "By script",
  "owner": "Administrator",
  "permissions": [
   {
@@ -159,6 +159,6 @@
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "title_field": "bed_number",
+ "title_field": "",
  "track_changes": 1
 }

@@ -624,8 +624,6 @@ property_management.desk.building_node = function (building) {
 		'<article class="pm-building"><div class="pm-row"><strong>' +
 		property_management.desk.doc_link("Building", building.name, building.label) +
 		"</strong> <span class=\"pm-note\">" +
-		property_management.desk.esc(building.building_code || "") +
-		" · " +
 		property_management.desk.esc(building.status || "") +
 		"</span> " +
 		property_management.desk.button("new-doc", __("Add flat"), {

@@ -1,0 +1,12 @@
+[
+ {
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocType",
+  "doc_type": "User",
+  "module": "Property Management",
+  "name": "User-main-show_title_field_in_link",
+  "property": "show_title_field_in_link",
+  "property_type": "Check",
+  "value": "1"
+ }
+]

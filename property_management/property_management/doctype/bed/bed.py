@@ -9,14 +9,30 @@ from property_management.hierarchy import (
 	prevent_delete_with_allocation_history,
 	refresh_counts_for_bed,
 )
+from property_management.names import assign_new_name, sync_bed_name
 
 
 class Bed(OwnedDocument):
+	def autoname(self):
+		self.bed_number = (self.bed_number or "").strip()
+		if not self.area:
+			frappe.throw(_("Area is required."))
+		area_name, flat = frappe.db.get_value("Area", self.area, ["area_name", "flat"]) or (None, None)
+		if not area_name:
+			frappe.throw(_("Area {0} was not found.").format(self.area))
+		flat_parts = frappe.db.get_value("Flat", flat, ["flat_number", "building"])
+		if not flat_parts:
+			frappe.throw(_("Flat {0} was not found.").format(flat))
+		flat_number, building = flat_parts
+		building_name = frappe.db.get_value("Building", building, "building_name")
+		assign_new_name(self, building_name, flat_number, area_name, self.bed_number)
+
 	def validate(self):
 		if not self.status:
 			self.status = "Active"
 		if not self.occupancy_status:
 			self.occupancy_status = "Vacant"
+		self.bed_number = (self.bed_number or "").strip()
 		copy_owner_from(self, "Area", self.area)
 		parent = frappe.db.get_value("Area", self.area, ["flat", "building"], as_dict=True)
 		self.flat = parent.flat
@@ -32,6 +48,7 @@ class Bed(OwnedDocument):
 		self._keep_occupancy_consistent()
 
 	def on_update(self):
+		sync_bed_name(self)
 		refresh_counts_for_bed(self.name)
 
 	def on_trash(self):
