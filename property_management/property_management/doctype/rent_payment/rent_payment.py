@@ -145,3 +145,23 @@ class RentPayment(OwnedDocument):
 			frappe.throw(
 				_("Allocated amounts must equal the payment amount. Over-allocation and unallocated cash are not allowed.")
 			)
+
+
+@frappe.whitelist()
+def open_invoices(tenant):
+	"""Open rent invoices for this tenant, oldest first, with the amount still due."""
+	if not tenant:
+		frappe.throw(_("Choose a tenant first."))
+	require_readable("Tenant", tenant)
+	return frappe.get_all(
+		"Rent Invoice",
+		filters={
+			"tenant": tenant,
+			"docstatus": 1,
+			"status": ["in", ["Unpaid", "Partly Paid"]],
+			"outstanding": [">", 0],
+		},
+		fields=["name", "invoice_number", "billing_month", "outstanding"],
+		order_by="billing_date asc, creation asc",
+		limit=500,
+	)

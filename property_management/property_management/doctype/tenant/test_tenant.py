@@ -18,6 +18,19 @@ class TestTenant(IntegrationTestCase):
 		frappe.set_user("Administrator")
 		super().tearDown()
 
+	def test_link_fields_show_the_tenant_name(self):
+		frappe.set_user("Administrator")
+		owner = make_property_user("Name Landlord")
+		frappe.set_user(owner["user"])
+		tenant = make_tenant("Sara Al Mazrouei")
+		self.assertEqual(frappe.get_meta("Tenant").show_title_field_in_link, 1)
+		self.assertEqual(frappe.get_meta("Tenant").title_field, "tenant_name")
+		from frappe.desk.link_title import get_link_titles
+
+		titles = get_link_titles("Tenant", "tenant_name", {tenant.name})
+		self.assertEqual(titles[tenant.name], "Sara Al Mazrouei")
+		self.assertNotEqual(titles[tenant.name], tenant.name)
+
 	def test_identification_number_is_required(self):
 		frappe.set_user("Administrator")
 		owner = make_property_user("ID Landlord")

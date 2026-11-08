@@ -792,6 +792,14 @@ property_management.desk.area_node = function (area) {
 						bed.current_tenant_name || bed.current_tenant
 					)
 				: __("No tenant");
+			const allocate =
+				bed.occupancy_status === "Vacant"
+					? " " +
+						property_management.desk.button("new-doc", __("Allocate"), {
+							doctype: "Bed Allocation",
+							bed: bed.name,
+						})
+					: "";
 			return (
 				"<li>" +
 				property_management.desk.doc_link("Bed", bed.name, bed.label) +
@@ -799,6 +807,7 @@ property_management.desk.area_node = function (area) {
 				property_management.desk.esc(bed.occupancy_status || "") +
 				" · " +
 				who +
+				allocate +
 				"</li>"
 			);
 		})
@@ -994,6 +1003,10 @@ property_management.desk.QUICK_ENTRY = {
 	Bed: 1,
 	Tenant: 1,
 	"Bed Allocation": 1,
+	"Rent Payment": 1,
+	"Tenant Deposit": 1,
+	"Deposit Transaction": 1,
+	"Property Expense": 1,
 };
 
 property_management.desk.open_new = function (state, button) {
@@ -1070,17 +1083,111 @@ property_management.desk.prepare_quick_entry = function (dialog, preset) {
 	return Promise.all(pending);
 };
 
+property_management.desk.add_quick_fields = function (form, names) {
+	names.forEach((fieldname) => {
+		const field = form.meta.fields.find((df) => df.fieldname === fieldname);
+		if (field && !form.docfields.some((df) => df.fieldname === fieldname)) {
+			form.docfields.push(field);
+		}
+	});
+};
+
 frappe.ui.form.BedAllocationQuickEntryForm = class BedAllocationQuickEntryForm extends (
 	frappe.ui.form.QuickEntryForm
 ) {
 	set_meta_and_mandatory_fields() {
 		super.set_meta_and_mandatory_fields();
-		["monthly_rent", "deposit_amount"].forEach((fieldname) => {
-			const field = this.meta.fields.find((df) => df.fieldname === fieldname);
-			if (field && !this.docfields.some((df) => df.fieldname === fieldname)) {
-				this.docfields.push(field);
-			}
+		property_management.desk.add_quick_fields(this, ["monthly_rent", "deposit_amount"]);
+	}
+};
+
+frappe.ui.form.RentPaymentQuickEntryForm = class RentPaymentQuickEntryForm extends (
+	frappe.ui.form.QuickEntryForm
+) {
+	set_meta_and_mandatory_fields() {
+		super.set_meta_and_mandatory_fields();
+		this.docfields = this.docfields.filter((df) => df.fieldtype !== "Table");
+		property_management.desk.add_quick_fields(this, ["cash_bank_account", "payment_reference"]);
+	}
+
+	insert(values) {
+		const me = this;
+		me.update_doc(values);
+		return new Promise((resolve) => {
+			frappe.call({
+				method: "property_management.property_management.doctype.rent_payment.rent_payment.open_invoices",
+				args: { tenant: me.doc.tenant },
+				callback(response) {
+					const rows = [];
+					let remaining = flt(me.doc.amount);
+					(response.message || []).forEach((invoice) => {
+						if (remaining <= 0.0001) {
+							return;
+						}
+						const take = Math.min(remaining, flt(invoice.outstanding));
+						if (take <= 0) {
+							return;
+						}
+						rows.push({
+							doctype: "Invoice Allocation",
+							parentfield: "allocations",
+							parenttype: "Rent Payment",
+							rent_invoice: invoice.name,
+							allocated_amount: take,
+						});
+						remaining = flt(remaining - take);
+					});
+					if (!rows.length || remaining > 0.0001) {
+						frappe.msgprint(
+							!rows.length
+								? __("This tenant has no open invoice.")
+								: __("The amount is more than the open invoices.")
+						);
+						me.dialog.working = false;
+						resolve();
+						return;
+					}
+					me.doc.allocations = rows;
+					frappe.ui.form.QuickEntryForm.prototype.insert.call(me, values).then(resolve);
+				},
+				error() {
+					me.dialog.working = false;
+					resolve();
+				},
+			});
 		});
+	}
+};
+
+frappe.ui.form.TenantDepositQuickEntryForm = class TenantDepositQuickEntryForm extends (
+	frappe.ui.form.QuickEntryForm
+) {
+	set_meta_and_mandatory_fields() {
+		super.set_meta_and_mandatory_fields();
+		property_management.desk.add_quick_fields(this, ["bed_allocation"]);
+	}
+};
+
+frappe.ui.form.DepositTransactionQuickEntryForm = class DepositTransactionQuickEntryForm extends (
+	frappe.ui.form.QuickEntryForm
+) {
+	set_meta_and_mandatory_fields() {
+		super.set_meta_and_mandatory_fields();
+		property_management.desk.add_quick_fields(this, [
+			"payment_mode",
+			"cash_bank_account",
+			"payment_reference",
+			"remarks",
+		]);
+	}
+};
+
+frappe.ui.form.PropertyExpenseQuickEntryForm = class PropertyExpenseQuickEntryForm extends (
+	frappe.ui.form.QuickEntryForm
+) {
+	set_meta_and_mandatory_fields() {
+		super.set_meta_and_mandatory_fields();
+		property_management.desk.add_quick_fields(this, ["flat", "area", "remarks"]);
 	}
 };
 
