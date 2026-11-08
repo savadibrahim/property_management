@@ -4,7 +4,8 @@ frappe.pages["user-report"].on_page_load = function (wrapper) {
 		title: __("User Report"),
 		single_column: true,
 	});
-	frappe.require("/assets/property_management/js/desk_pages.js?v=20261108c").then(() => {
+	// The query must end in .js. frappe.require reads the extension from the query string.
+	frappe.require("/assets/property_management/js/desk_pages.js?v=20261108e.js").then(() => {
 		property_management.desk.mount(page, "user-report");
 	});
 };
