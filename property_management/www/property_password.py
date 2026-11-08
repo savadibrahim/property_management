@@ -1,6 +1,10 @@
 import frappe
 
-from property_management.auth import DESK_HOME, must_change_password
+from property_management import auth
+from property_management.auth import must_change_password
+
+# The remote server can be running an older auth.py that has no DESK_HOME.
+DESK_HOME = getattr(auth, "DESK_HOME", "/desk/property-management")
 
 no_cache = 1
 
