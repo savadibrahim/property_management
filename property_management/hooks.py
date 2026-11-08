@@ -33,7 +33,7 @@ doc_events = {
 }
 
 permission_query_conditions = {
-	"User": "property_management.permissions.query_user",
+	"User": "property_management.hooks.query_user",
 	"Property User Profile": "property_management.permissions.query_property_user_profile",
 	"Building": "property_management.permissions.query_building",
 	"Flat": "property_management.permissions.query_flat",
@@ -53,7 +53,7 @@ permission_query_conditions = {
 }
 
 has_permission = {
-	"User": "property_management.permissions.has_user_permission",
+	"User": "property_management.hooks.has_user_permission",
 	"Property User Profile": "property_management.permissions.has_permission",
 	"Building": "property_management.permissions.has_permission",
 	"Flat": "property_management.permissions.has_permission",
@@ -73,7 +73,7 @@ has_permission = {
 }
 
 standard_queries = {
-	"User": "property_management.permissions.user_query",
+	"User": "property_management.hooks.user_query",
 }
 
 scheduler_events = {
@@ -107,3 +107,58 @@ doctype_js = {
 	"Property User Profile": "public/js/property_user_profile.js",
 	"Bed Allocation": "public/js/bed_allocation.js",
 }
+
+
+def query_user(user=None, doctype="User"):
+	"""User list filter. The running server may still have a permissions.py with no query_user."""
+	import frappe
+	from property_management import permissions
+
+	implemented = getattr(permissions, "query_user", None)
+	if implemented:
+		return implemented(user=user, doctype=doctype)
+
+	user = user or frappe.session.user
+	if permissions.is_privileged(user):
+		return None
+	if not permissions.is_property_user(user):
+		return "1=0"
+	return f"`tabUser`.`name` = {frappe.db.escape(user)}"
+
+
+def has_user_permission(doc, ptype=None, user=None, debug=False):
+	"""User document check. Falls back when permissions.py has no has_user_permission."""
+	from property_management import permissions
+
+	implemented = getattr(permissions, "has_user_permission", None)
+	if implemented:
+		return implemented(doc, ptype=ptype, user=user, debug=debug)
+
+	import frappe
+
+	user = user or frappe.session.user
+	if permissions.is_privileged(user):
+		return True
+	if not permissions.is_property_user(user):
+		return False
+	doc_name = doc.name if hasattr(doc, "name") else doc
+	return doc_name == user
+
+
+def user_query(doctype, txt, searchfield, start, page_len, filters):
+	"""User link search. Falls back when permissions.py has no user_query."""
+	import frappe
+	from frappe.core.doctype.user.user import user_query as core_user_query
+	from property_management import permissions
+
+	implemented = getattr(permissions, "user_query", None)
+	if implemented:
+		return implemented(doctype, txt, searchfield, start, page_len, filters)
+
+	user = frappe.session.user
+	if not permissions.is_privileged(user):
+		if not permissions.is_property_user(user):
+			return []
+		filters = dict(filters or {})
+		filters["name"] = user
+	return core_user_query(doctype, txt, searchfield, start, page_len, filters)
