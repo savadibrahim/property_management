@@ -16,6 +16,7 @@ from frappe import _
 from frappe.utils import cint, flt, get_first_day, get_last_day, getdate, today
 
 from property_management.auth import resolve_user
+from property_management.billing import generate_due_rent_invoices
 from property_management.hierarchy import require_readable
 from property_management.permissions import is_privileged, is_property_user
 
@@ -96,6 +97,7 @@ def get_overview(owner_user=None, building=None, flat=None, area=None, from_date
 def get_operations(owner_user=None, building=None, flat=None, area=None, from_date=None, to_date=None):
 	"""Hierarchy and the records the User Report can open. Same scope rules as the overview."""
 	scope = resolve_scope(owner_user, building, flat, area, from_date, to_date)
+	generate_due_rent_invoices(owner=scope.owner)
 	return {
 		"scope": _scope_payload(scope),
 		"hierarchy": _hierarchy(scope),

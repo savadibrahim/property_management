@@ -93,18 +93,30 @@ class TestMonthlyBilling(IntegrationTestCase):
 		self.assertEqual(january.docstatus, 1)
 		self.assertEqual(flt(january.outstanding), flt(january.rent_amount))
 
-	def test_billing_day_clamps_in_february(self):
-		frappe.set_user("Administrator")
-		settings = frappe.get_single("Property Settings")
-		settings.billing_day = 31
-		settings.save()
-		frappe.set_user(self.owner["user"])
-		allocation = self.allocate("2026-02-01", rent=900)
+	def test_start_day_clamps_in_february(self):
+		allocation = self.allocate("2026-01-31", rent=900)
 		schedule = self.schedule_for(allocation)
 		generate_rent_invoices(as_of="2026-02-28", monthly_revenue=schedule)
-		invoice = self.invoice_for(allocation, "2026-02")
-		self.assertEqual(getdate(invoice.billing_date), getdate("2026-02-28"))
-		self.assertEqual(getdate(invoice.due_date), getdate("2026-03-07"))
+		january = self.invoice_for(allocation, "2026-01")
+		february = self.invoice_for(allocation, "2026-02")
+		self.assertEqual(getdate(january.billing_date), getdate("2026-01-31"))
+		self.assertEqual(getdate(february.billing_date), getdate("2026-02-28"))
+		self.assertEqual(getdate(february.due_date), getdate("2026-03-07"))
+
+	def test_invoice_waits_until_the_start_day(self):
+		allocation = self.allocate("2026-03-15", rent=800)
+		schedule = self.schedule_for(allocation)
+		early = generate_rent_invoices(as_of="2026-03-14", monthly_revenue=schedule)
+		self.assertEqual(early["created"], 0)
+		self.assertFalse(frappe.db.exists("Rent Invoice", {"bed_allocation": allocation.name}))
+		opened = generate_rent_invoices(as_of="2026-03-15", monthly_revenue=schedule)
+		self.assertEqual(opened["created"], 1)
+		self.assertEqual(getdate(self.invoice_for(allocation, "2026-03").billing_date), getdate("2026-03-15"))
+		before_april = generate_rent_invoices(as_of="2026-04-14", monthly_revenue=schedule)
+		self.assertEqual(before_april["created"], 0)
+		april = generate_rent_invoices(as_of="2026-04-15", monthly_revenue=schedule)
+		self.assertEqual(april["created"], 1)
+		self.assertEqual(getdate(self.invoice_for(allocation, "2026-04").billing_date), getdate("2026-04-15"))
 
 	def test_future_revision_keeps_submitted_invoice(self):
 		allocation = self.allocate("2026-01-01", rent=1000)

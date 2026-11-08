@@ -5,9 +5,15 @@ from frappe.tests.classes.integration_test_case import IntegrationTestCase
 from frappe.utils import add_days, cint, today
 
 from property_management.api import change_own_password, create_property_user
-from property_management.auth import DESK_HOME, assert_login_allowed, before_request, on_login
+from property_management.auth import (
+	DESK_HOME,
+	USER_REPORT_HOME,
+	assert_login_allowed,
+	before_request,
+	on_login,
+)
 from property_management.install import ROLE_PROPERTY_SUPER_ADMIN, ROLE_PROPERTY_USER, ensure_roles
-from property_management.testing import future_expiry, make_property_user, unique_mobile
+from property_management.testing import future_expiry, make_property_user, make_super_admin, unique_mobile
 
 test_records = []
 
@@ -117,9 +123,9 @@ class TestPropertyUserProfile(IntegrationTestCase):
 		created = make_property_user()
 		frappe.set_user(created["user"])
 		page.update_context()
-		self.assertEqual(page.context.desk_home, DESK_HOME)
+		self.assertEqual(page.context.desk_home, USER_REPORT_HOME)
 
-	def test_on_login_opens_property_desk(self):
+	def test_on_login_opens_user_report_for_a_property_user(self):
 		frappe.set_user("Administrator")
 		created = make_property_user()
 		frappe.db.set_value(
@@ -132,7 +138,36 @@ class TestPropertyUserProfile(IntegrationTestCase):
 		frappe.set_user(created["user"])
 		frappe.local.flags.home_page = None
 		on_login(frappe._dict(user=created["user"]))
+		self.assertEqual(frappe.local.flags.home_page, USER_REPORT_HOME)
+
+	def test_on_login_opens_workspace_for_a_super_admin(self):
+		frappe.set_user("Administrator")
+		user = make_super_admin()
+		frappe.local.flags.home_page = None
+		on_login(frappe._dict(user=user))
 		self.assertEqual(frappe.local.flags.home_page, DESK_HOME)
+
+	def test_workspace_url_opens_user_report_for_a_property_user(self):
+		frappe.set_user("Administrator")
+		created = make_property_user()
+		frappe.db.set_value(
+			"Property User Profile",
+			created["property_user_profile"],
+			"must_change_password",
+			0,
+			update_modified=False,
+		)
+		frappe.set_user(created["user"])
+		previous_request = getattr(frappe.local, "request", None)
+		frappe.local.request = frappe._dict(path=DESK_HOME, method="GET")
+		try:
+			with self.assertRaises(HTTPException) as ctx:
+				before_request()
+			response = ctx.exception.get_response()
+			self.assertEqual(response.status_code, 302)
+			self.assertEqual(response.headers.get("Location"), USER_REPORT_HOME)
+		finally:
+			frappe.local.request = previous_request
 
 	def test_on_login_opens_password_page_when_change_is_required(self):
 		frappe.set_user("Administrator")

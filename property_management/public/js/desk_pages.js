@@ -58,7 +58,13 @@ property_management.desk.mount = function (page, mode) {
 		return;
 	}
 
-	state.root.append(property_management.desk.lead(mode));
+	if (mode !== "user-report") {
+		state.root.append(property_management.desk.lead(mode));
+	}
+	if (mode === "user-report") {
+		state.nav_el = $('<div class="pm-nav"></div>').appendTo(state.root);
+		property_management.desk.render_nav(state);
+	}
 	state.filters_el = $('<div class="pm-filters"></div>').appendTo(state.root);
 	state.status_el = $('<div class="pm-status"></div>').appendTo(state.root);
 	state.kpis_el = $('<div class="pm-kpis"></div>').appendTo(state.root);
@@ -67,9 +73,7 @@ property_management.desk.mount = function (page, mode) {
 		state.users_el = $('<div class="pm-users"></div>').appendTo(state.root);
 	}
 	if (mode === "user-report") {
-		state.nav_el = $('<div class="pm-nav"></div>').appendTo(state.root);
 		state.ops_el = $('<div class="pm-ops"></div>').appendTo(state.root);
-		property_management.desk.render_nav(state);
 	}
 	state.measures_el = $('<div class="pm-measures"></div>').appendTo(state.root);
 	state.root.on("submit", "[data-pm-create]", (event) => {
@@ -283,6 +287,11 @@ property_management.desk.select_field = function (name, label, options) {
 };
 
 property_management.desk.render_kpis = function (state) {
+	if (state.mode === "user-report") {
+		state.kpis_el.empty().hide();
+		return;
+	}
+	state.kpis_el.show();
 	const overview = state.overview || {};
 	const money = overview.money || {};
 	const occupancy = overview.occupancy || {};
@@ -510,26 +519,15 @@ property_management.desk.render_nav = function (state) {
 
 property_management.desk.render_operations = function (state) {
 	const ops = state.operations || {};
-	const privileged = state.overview && state.overview.scope && state.overview.scope.privileged;
-	const parts = [
-		property_management.desk.hierarchy_section(ops.hierarchy || [], privileged),
+	const tab = state.report_tab || "buildings";
+	const buildings = [
+		property_management.desk.kpi_grid(property_management.desk.occupancy_cards(state)),
+		property_management.desk.hierarchy_section(ops.hierarchy || []),
+	].join("");
+	const records = [
+		property_management.desk.kpi_grid(property_management.desk.money_cards(state)),
 		property_management.desk.allocation_section(ops.allocations),
-		property_management.desk.schedule_section(ops.schedules, privileged),
-		property_management.desk.table_section(
-			__("Invoices in this period"),
-			__("No rent invoices in this period."),
-			ops.invoices,
-			[__("Invoice"), __("Tenant"), __("Month"), __("Rent"), __("Paid"), __("Outstanding"), __("Status")],
-			(row) => [
-				property_management.desk.doc_link("Rent Invoice", row.name, row.name),
-				property_management.desk.esc(row.tenant_name || row.tenant || ""),
-				property_management.desk.esc(row.billing_month || ""),
-				property_management.desk.money(row.rent_amount),
-				property_management.desk.money(row.amount_paid),
-				property_management.desk.money(row.outstanding),
-				property_management.desk.esc(row.status || ""),
-			]
-		),
+		property_management.desk.invoice_section(state, ops.invoices),
 		property_management.desk.table_section(
 			__("Collections in this period"),
 			__("No rent payments in this period."),
@@ -598,8 +596,138 @@ property_management.desk.render_operations = function (state) {
 			],
 			property_management.desk.button("new-doc", __("New expense"), { doctype: "Property Expense" })
 		),
+	].join("");
+	state.ops_el.html(
+		property_management.desk.report_tabs(tab) +
+			'<div class="pm-panel"' +
+			(tab === "buildings" ? "" : " hidden") +
+			">" +
+			buildings +
+			"</div>" +
+			'<div class="pm-panel"' +
+			(tab === "records" ? "" : " hidden") +
+			">" +
+			records +
+			"</div>"
+	);
+};
+
+property_management.desk.report_tabs = function (tab) {
+	const items = [
+		["buildings", __("Building overview")],
+		["records", __("Rent and expenses")],
 	];
-	state.ops_el.html(parts.join(""));
+	return (
+		'<div class="pm-nav">' +
+		items
+			.map(
+				(item) =>
+					'<button type="button" class="btn btn-sm ' +
+					(tab === item[0] ? "btn-primary" : "btn-default") +
+					'" data-pm-action="report-tab" data-tab="' +
+					item[0] +
+					'">' +
+					property_management.desk.esc(item[1]) +
+					"</button>"
+			)
+			.join("") +
+		"</div>"
+	);
+};
+
+property_management.desk.invoice_section = function (state, bundle) {
+	const status = state.invoice_status || "all";
+	const source = (bundle && bundle.rows) || [];
+	const rows = status === "all" ? source : source.filter((row) => row.status === status);
+	const filters = [
+		["all", __("All")],
+		["Unpaid", __("Unpaid")],
+		["Partly Paid", __("Partly paid")],
+	]
+		.map(
+			(item) =>
+				'<button type="button" class="btn btn-sm ' +
+				(status === item[0] ? "btn-primary" : "btn-default") +
+				'" data-pm-action="invoice-status" data-status="' +
+				item[0] +
+				'">' +
+				property_management.desk.esc(item[1]) +
+				"</button>"
+		)
+		.join("");
+	const empty =
+		status === "all"
+			? __("No rent invoices in this period.")
+			: __("No invoices with this payment status in this period.");
+	return property_management.desk.table_section(
+		__("Invoices in this period"),
+		empty,
+		{ rows, truncated: bundle && bundle.truncated },
+		[__("Invoice"), __("Tenant"), __("Month"), __("Rent"), __("Paid"), __("Outstanding"), __("Status")],
+		(row) => [
+			property_management.desk.doc_link("Rent Invoice", row.name, row.name),
+			property_management.desk.esc(row.tenant_name || row.tenant || ""),
+			property_management.desk.esc(row.billing_month || ""),
+			property_management.desk.money(row.rent_amount),
+			property_management.desk.money(row.amount_paid),
+			property_management.desk.money(row.outstanding),
+			property_management.desk.esc(row.status || ""),
+		],
+		filters
+	);
+};
+
+property_management.desk.occupancy_cards = function (state) {
+	const occupancy = (state.overview && state.overview.occupancy) || {};
+	return [
+		[__("Buildings"), occupancy.buildings],
+		[__("Flats"), occupancy.flats],
+		[__("Areas"), occupancy.areas],
+		[__("Beds"), occupancy.beds],
+		[__("Occupied"), occupancy.beds_occupied],
+		[__("Vacant"), occupancy.beds_vacant],
+		[__("Maintenance"), occupancy.beds_maintenance],
+		[__("Occupancy"), property_management.desk.percent(occupancy.occupancy_rate)],
+	];
+};
+
+property_management.desk.money_cards = function (state) {
+	const money = (state.overview && state.overview.money) || {};
+	const profit = Number(money.operating_profit || 0);
+	return [
+		[__("Monthly fixed rent"), property_management.desk.money(money.monthly_fixed_rent)],
+		[__("Recognized rent"), property_management.desk.money(money.recognized_rental_revenue)],
+		[__("Rent collected"), property_management.desk.money(money.rent_collected)],
+		[__("Allocated receipts"), property_management.desk.money(money.allocated_receipts)],
+		[__("Advances"), property_management.desk.money(money.advances)],
+		[__("Outstanding in period"), property_management.desk.money(money.outstanding_in_period)],
+		[__("All open receivables"), property_management.desk.money(money.outstanding_open)],
+		[__("Held deposits"), property_management.desk.money(money.held_deposits)],
+		[__("Deposit transferred"), property_management.desk.money(money.deposit_transferred_to_revenue)],
+		[__("Expenses"), property_management.desk.money(money.expenses)],
+		[__("Operating profit"), property_management.desk.money(profit), profit < 0 ? "loss" : profit > 0 ? "profit" : ""],
+	];
+};
+
+property_management.desk.kpi_grid = function (cards) {
+	return (
+		'<div class="pm-kpis">' +
+		cards
+			.map((card) => {
+				const tone = card[2] ? " " + card[2] : "";
+				return (
+					'<article class="pm-kpi' +
+					tone +
+					'"><span>' +
+					property_management.desk.esc(card[0]) +
+					"</span><strong>" +
+					property_management.desk.esc(card[1] == null ? "0" : card[1]) +
+					"</strong></article>"
+				);
+			})
+			.join("") +
+		"</div>"
+	);
 };
 
 property_management.desk.hierarchy_section = function (tree) {
@@ -671,17 +799,6 @@ property_management.desk.area_node = function (area) {
 				property_management.desk.esc(bed.occupancy_status || "") +
 				" · " +
 				who +
-				" " +
-				(bed.current_allocation
-					? property_management.desk.button("open-doc", __("Allocation"), {
-							doctype: "Bed Allocation",
-							name: bed.current_allocation,
-						})
-					: property_management.desk.button("new-doc", __("Allocate"), {
-							doctype: "Bed Allocation",
-							bed: bed.name,
-							tenant: bed.current_tenant || "",
-						})) +
 				"</li>"
 			);
 		})
@@ -795,6 +912,16 @@ property_management.desk.render_measures = function (state) {
 
 property_management.desk.on_action = function (state, button) {
 	const action = button.dataset.pmAction;
+	if (action === "report-tab") {
+		state.report_tab = button.dataset.tab || "buildings";
+		property_management.desk.render_operations(state);
+		return;
+	}
+	if (action === "invoice-status") {
+		state.invoice_status = button.dataset.status || "all";
+		property_management.desk.render_operations(state);
+		return;
+	}
 	if (action === "apply") {
 		property_management.desk.read_filters(state);
 		property_management.desk.load(state);
@@ -860,13 +987,39 @@ property_management.desk.on_action = function (state, button) {
 	}
 };
 
+property_management.desk.QUICK_ENTRY = {
+	Building: 1,
+	Flat: 1,
+	Area: 1,
+	Bed: 1,
+	Tenant: 1,
+	"Bed Allocation": 1,
+};
+
 property_management.desk.open_new = function (state, button) {
+	const doctype = button.dataset.doctype;
+	const values = property_management.desk.new_values(state, button);
+	if (!values) {
+		return;
+	}
+	if (property_management.desk.QUICK_ENTRY[doctype]) {
+		property_management.desk.open_quick_entry(state, doctype, values);
+		return;
+	}
+	frappe.model.with_doctype(doctype, () => {
+		frappe.route_options = values;
+		const doc = frappe.model.get_new_doc(doctype);
+		frappe.set_route("Form", doctype, doc.name);
+	});
+};
+
+property_management.desk.new_values = function (state, button) {
 	const privileged = state.overview && state.overview.scope && state.overview.scope.privileged;
 	const values = {};
 	if (privileged) {
 		if (!state.filters.owner_user) {
 			frappe.msgprint(__("Choose a property user before adding a record."));
-			return;
+			return null;
 		}
 		values.owner_user = state.filters.owner_user;
 	}
@@ -879,11 +1032,56 @@ property_management.desk.open_new = function (state, button) {
 	if (state.filters.building && !values.building && button.dataset.doctype !== "Building") {
 		values.building = state.filters.building;
 	}
-	frappe.model.with_doctype(button.dataset.doctype, () => {
-		frappe.route_options = values;
-		const doc = frappe.model.get_new_doc(button.dataset.doctype);
-		frappe.set_route("Form", button.dataset.doctype, doc.name);
+	return values;
+};
+
+property_management.desk.open_quick_entry = function (state, doctype, values) {
+	const preset = Object.assign({}, values);
+	if (!preset.owner_user) {
+		preset.owner_user = frappe.session.user;
+	}
+	if (doctype === "Bed Allocation") {
+		preset.allocation_status = "Active";
+	}
+	frappe.model.with_doctype(doctype, () => {
+		const doc = frappe.model.get_new_doc(doctype);
+		Object.assign(doc, preset);
+		// force: these DocTypes do not enable quick entry on the list, only here.
+		frappe.ui.form.make_quick_entry(
+			doctype,
+			() => property_management.desk.load(state),
+			(dialog) => property_management.desk.prepare_quick_entry(dialog, preset),
+			doc,
+			true
+		);
 	});
+};
+
+property_management.desk.prepare_quick_entry = function (dialog, preset) {
+	dialog.skip_redirect_on_error = true;
+	const pending = [];
+	Object.keys(preset).forEach((fieldname) => {
+		if (!dialog.fields_dict || !dialog.fields_dict[fieldname]) {
+			return;
+		}
+		dialog.set_df_property(fieldname, "read_only", 1);
+		pending.push(dialog.set_value(fieldname, preset[fieldname]));
+	});
+	return Promise.all(pending);
+};
+
+frappe.ui.form.BedAllocationQuickEntryForm = class BedAllocationQuickEntryForm extends (
+	frappe.ui.form.QuickEntryForm
+) {
+	set_meta_and_mandatory_fields() {
+		super.set_meta_and_mandatory_fields();
+		["monthly_rent", "deposit_amount"].forEach((fieldname) => {
+			const field = this.meta.fields.find((df) => df.fieldname === fieldname);
+			if (field && !this.docfields.some((df) => df.fieldname === fieldname)) {
+				this.docfields.push(field);
+			}
+		});
+	}
 };
 
 property_management.desk.create_user = function (state) {
@@ -1148,16 +1346,12 @@ property_management.desk.docstatus = function (value) {
 	return __("Draft");
 };
 
-property_management.desk.lead = function (mode) {
-	const text =
-		mode === "super-admin"
-			? __(
-					"Create property logins, move expiry, and read occupancy and money for every account or one user."
-				)
-			: __(
-					"Your buildings, tenants, rent schedules, collections, deposits, and expenses. Figures are read from the records, for the current month unless you change the dates."
-				);
-	return $("<p class=\"pm-lead\"></p>").text(text);
+property_management.desk.lead = function () {
+	return $("<p class=\"pm-lead\"></p>").text(
+		__(
+			"Create property logins, move expiry, and read occupancy and money for every account or one user."
+		)
+	);
 };
 
 property_management.desk.banner = function (html, class_name) {

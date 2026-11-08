@@ -17,7 +17,7 @@
   },
   {
    "default": "1",
-   "description": "Day of the month an invoice is raised. Months with fewer days use the last day. Default is 1.",
+   "description": "Not used for new invoices. Each month is raised on the day of the Monthly Revenue start date. A shorter month uses the last day.",
    "fieldname": "billing_day",
    "fieldtype": "Int",
    "label": "Billing Day",

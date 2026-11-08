@@ -8,7 +8,7 @@ from frappe import _
 from frappe.utils import cint, getdate, today
 
 from property_management.install import ROLE_PROPERTY_SUPER_ADMIN, ROLE_PROPERTY_USER
-from property_management.permissions import PRIVILEGED_ROLES
+from property_management.permissions import PRIVILEGED_ROLES, is_privileged, is_property_user
 
 
 class _PasswordChangeRedirect(HTTPException, frappe.Redirect):
@@ -38,8 +38,9 @@ PASSWORD_CHANGE_PATHS = {
 }
 PASSWORD_CHANGE_PREFIXES = ("/assets/", "/socket.io")
 
-# Desk workspace opened after a successful sign-in. https://dormo.online/desk/property-management
+# Desk workspace for privileged accounts. A property user opens the User Report.
 DESK_HOME = "/desk/property-management"
+USER_REPORT_HOME = "/desk/property-management/user-report"
 
 
 def normalize_mobile(mobile):
@@ -177,7 +178,15 @@ def on_login(login_manager=None):
 		frappe.cache.hset("redirect_after_login", user, "/property-password")
 		frappe.local.flags.home_page = "/property-password"
 		return
-	frappe.local.flags.home_page = DESK_HOME
+	frappe.local.flags.home_page = desk_home(user)
+
+
+def desk_home(user=None):
+	"""Landing desk path after sign-in and after the password is changed."""
+	user = user or frappe.session.user
+	if is_property_user(user) and not is_privileged(user):
+		return USER_REPORT_HOME
+	return DESK_HOME
 
 
 def before_request():
@@ -196,6 +205,7 @@ def before_request():
 		raise
 
 	if not must_change_password(user):
+		_send_property_user_to_report(request, user)
 		return
 
 	path = request.path or ""
@@ -262,6 +272,20 @@ def validate_reset_password(doc, method=None):
 		_("Password reset for this account is done by a Property Super Admin."),
 		frappe.PermissionError,
 	)
+
+
+def _send_property_user_to_report(request, user):
+	"""A full load of the workspace URL is the app's landing path. Open the report instead."""
+	if (getattr(request, "method", None) or "GET") not in ("GET", "HEAD"):
+		return
+	path = (request.path or "").rstrip("/")
+	if path != DESK_HOME:
+		return
+	target = desk_home(user)
+	if target == path:
+		return
+	frappe.local.flags.redirect_location = target
+	raise _PasswordChangeRedirect(target)
 
 
 def _profile_table_missing():

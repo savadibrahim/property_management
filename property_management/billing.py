@@ -1,10 +1,10 @@
 """Calendar-month rent billing.
 
-Defaults live on Property Settings, not in this module: billing day 1 (clamped to the
-last day of shorter months), actual-day proration on, and due 7 days after the later
-of the billing date and the first occupied day in the month. The daily scheduler
-generates one invoice per occupied month and catches up missed months. It does not
-change invoices that were already submitted.
+Each Monthly Revenue schedule raises its invoice on the day of its start date.
+A shorter month uses the last day. Property Settings still controls proration and
+how many days after that date the invoice is due. The daily scheduler generates
+one invoice per occupied month and catches up missed months. It does not change
+invoices that were already submitted.
 """
 
 import calendar
@@ -17,12 +17,12 @@ from frappe.utils import add_days, cint, flt, getdate, today
 from property_management.permissions import is_privileged, is_property_user
 
 
-def generate_due_rent_invoices(as_of=None, monthly_revenue=None, manual=False):
-	"""Create missing rent invoices for occupied months whose billing date has arrived."""
+def generate_due_rent_invoices(as_of=None, monthly_revenue=None, manual=False, owner=None):
+	"""Create missing rent invoices for occupied months whose start day has arrived."""
 	as_of = getdate(as_of) if as_of else getdate(today())
 	created = skipped = failed = 0
 	invoices = []
-	for schedule_name in _schedules_to_scan(monthly_revenue, manual=manual):
+	for schedule_name in _schedules_to_scan(monthly_revenue, manual=manual, owner=owner):
 		outcome = _generate_for_schedule(schedule_name, as_of, log_skips=bool(monthly_revenue or manual))
 		created += outcome["created"]
 		skipped += outcome["skipped"]
@@ -108,11 +108,13 @@ def _require_billing_user():
 	frappe.throw(_("You are not allowed to generate rent."), frappe.PermissionError)
 
 
-def _schedules_to_scan(monthly_revenue, manual):
+def _schedules_to_scan(monthly_revenue, manual, owner=None):
 	if monthly_revenue:
 		return [monthly_revenue]
 	filters = {}
-	if manual and not is_privileged():
+	if owner:
+		filters["owner_user"] = owner
+	elif manual and not is_privileged():
 		filters["owner_user"] = frappe.session.user
 	return frappe.get_all("Monthly Revenue", filters=filters, pluck="name")
 
@@ -196,7 +198,8 @@ def _period(month, start, end, as_of, settings, schedule):
 	occupied_end = min(month_end, end) if end else month_end
 	if occupied_start > occupied_end:
 		return None
-	billing_day = min(settings.billing_day, month_end.day)
+	# The schedule start date sets the day. 31 January bills on 28 or 29 February.
+	billing_day = min(start.day, month_end.day)
 	billing_date = date(month.year, month.month, billing_day)
 	if as_of < max(billing_date, occupied_start):
 		return None
@@ -244,15 +247,11 @@ def _create_invoice(schedule, period):
 
 def _billing_settings():
 	settings = frappe.get_single("Property Settings")
-	day = cint(settings.billing_day) or 1
-	if day < 1 or day > 31:
-		day = 1
 	due = settings.due_days_after_billing
 	due_days = 7 if due is None or due == "" else cint(due)
 	if due_days < 0:
 		due_days = 7
 	return frappe._dict(
-		billing_day=day,
 		prorate=cint(settings.prorate_partial_months) if settings.prorate_partial_months is not None else 1,
 		due_days=due_days,
 	)
