@@ -73,9 +73,44 @@ def post_financial_transaction(
 	return doc.name
 
 
+def sync_tenant_deposit(allocation):
+	"""Open or update a Tenant Deposit for an active allocation with a deposit amount."""
+	if not allocation or not allocation.get("name"):
+		return
+	if allocation.allocation_status != "Active" or flt(allocation.deposit_amount) <= 0:
+		return
+	existing = frappe.db.get_value("Tenant Deposit", {"bed_allocation": allocation.name}, "name")
+	if existing:
+		recompute_deposit_balance(existing)
+		return
+	doc = frappe.new_doc("Tenant Deposit")
+	doc.tenant = allocation.tenant
+	doc.bed_allocation = allocation.name
+	doc.owner_user = allocation.owner_user
+	doc.deposit_due = flt(allocation.deposit_amount)
+	doc.insert()
+
+
 def recompute_deposit_balance(tenant_deposit):
 	if not tenant_deposit or not frappe.db.exists("Tenant Deposit", tenant_deposit):
 		return
+	deposit = frappe.db.get_value(
+		"Tenant Deposit",
+		tenant_deposit,
+		["bed_allocation", "tenant"],
+		as_dict=True,
+	)
+	bed_allocation = deposit.bed_allocation if deposit else None
+	tenant_name = (
+		frappe.db.get_value("Tenant", deposit.tenant, "tenant_name")
+		if deposit and deposit.tenant
+		else None
+	)
+	agreed = (
+		flt(frappe.db.get_value("Bed Allocation", bed_allocation, "deposit_amount"))
+		if bed_allocation
+		else 0.0
+	)
 	rows = frappe.get_all(
 		"Deposit Transaction",
 		filters={"tenant_deposit": tenant_deposit, "docstatus": 1},
@@ -91,10 +126,13 @@ def recompute_deposit_balance(tenant_deposit):
 		elif row.transaction_type == "Transfer to Revenue":
 			transferred += amount
 	balance = flt(received - refunded - transferred)
+	deposit_due = max(flt(agreed - received), 0.0)
 	frappe.db.set_value(
 		"Tenant Deposit",
 		tenant_deposit,
 		{
+			"tenant_name": tenant_name,
+			"deposit_due": deposit_due,
 			"total_received": received,
 			"total_refunded": refunded,
 			"total_transferred": transferred,
@@ -146,6 +184,6 @@ def location_from_allocation(bed_allocation):
 	return frappe.db.get_value(
 		"Bed Allocation",
 		bed_allocation,
-		["tenant", "building", "flat", "area", "bed", "owner_user"],
+		["tenant", "building", "flat", "area", "bed", "owner_user", "deposit_amount"],
 		as_dict=True,
 	) or {}

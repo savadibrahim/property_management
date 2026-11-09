@@ -163,8 +163,10 @@ def get_operations(owner_user=None, building=None, flat=None, area=None, from_da
 			[
 				"name",
 				"tenant",
+				"bed_allocation",
 				"bed",
 				"status",
+				"deposit_due",
 				"balance",
 				"total_received",
 				"total_refunded",

@@ -35,6 +35,16 @@ class Tenant(OwnedDocument):
 		)
 		self._validate_status()
 
+	def on_update(self):
+		if self.name and self.tenant_name:
+			frappe.db.set_value(
+				"Tenant Deposit",
+				{"tenant": self.name},
+				"tenant_name",
+				self.tenant_name,
+				update_modified=False,
+			)
+
 	def on_trash(self):
 		prevent_delete_with_allocation_history(self)
 

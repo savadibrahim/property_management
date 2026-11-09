@@ -8,16 +8,19 @@
  "module": "Property Management",
  "name": "Tenant Deposit",
  "owner": "Administrator",
+ "show_title_field_in_link": 1,
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
+ "title_field": "tenant_name",
  "track_changes": 1,
  "autoname": "format:DEP-{#####}",
  "naming_rule": "Expression",
  "description": "Held deposit. Receipts are not rent revenue. Balance falls only on refund or transfer to revenue.",
- "search_fields": "tenant",
+ "search_fields": "tenant_name,tenant,bed",
  "field_order": [
   "tenant",
+  "tenant_name",
   "bed_allocation",
   "status",
   "column_break_main",
@@ -27,6 +30,7 @@
   "area",
   "bed",
   "balance_section",
+  "deposit_due",
   "total_received",
   "total_refunded",
   "total_transferred",
@@ -41,6 +45,14 @@
    "label": "Tenant",
    "options": "Tenant",
    "reqd": 1
+  },
+  {
+   "fetch_from": "tenant.tenant_name",
+   "fieldname": "tenant_name",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Tenant Name",
+   "read_only": 1
   },
   {
    "fieldname": "bed_allocation",
@@ -103,6 +115,14 @@
    "fieldname": "balance_section",
    "fieldtype": "Section Break",
    "label": "Balance"
+  },
+  {
+   "default": "0",
+   "fieldname": "deposit_due",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Deposit Due",
+   "read_only": 1
   },
   {
    "default": "0",

@@ -148,6 +148,64 @@ class TestBedAllocation(IntegrationTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			frappe.get_doc("Bed Allocation", allocation.name).delete()
 
+	def test_allocation_creates_tenant_deposit_when_deposit_amount_is_set(self):
+		tenant = make_tenant("Deposit Tenant")
+		allocation = make_allocation(self.bed.name, tenant.name, monthly_rent=1500, deposit_amount=500)
+		deposits = frappe.get_all(
+			"Tenant Deposit",
+			filters={"bed_allocation": allocation.name},
+			fields=[
+				"name",
+				"tenant",
+				"tenant_name",
+				"owner_user",
+				"building",
+				"flat",
+				"area",
+				"bed",
+				"status",
+				"deposit_due",
+				"balance",
+			],
+		)
+		self.assertEqual(len(deposits), 1)
+		self.assertEqual(deposits[0].tenant, tenant.name)
+		self.assertEqual(deposits[0].tenant_name, "Deposit Tenant")
+		self.assertEqual(frappe.get_meta("Tenant Deposit").show_title_field_in_link, 1)
+		self.assertEqual(frappe.get_meta("Tenant Deposit").title_field, "tenant_name")
+		self.assertEqual(deposits[0].owner_user, self.owner["user"])
+		self.assertEqual(deposits[0].building, self.building.name)
+		self.assertEqual(deposits[0].flat, self.flat.name)
+		self.assertEqual(deposits[0].area, self.area.name)
+		self.assertEqual(deposits[0].bed, self.bed.name)
+		self.assertEqual(deposits[0].status, "Active")
+		self.assertEqual(flt(deposits[0].deposit_due), 500)
+		self.assertEqual(flt(deposits[0].balance), 0)
+
+		allocation.deposit_amount = 750
+		allocation.remarks = "Updated remarks"
+		allocation.save()
+		self.assertEqual(frappe.db.count("Tenant Deposit", {"bed_allocation": allocation.name}), 1)
+		self.assertEqual(
+			flt(frappe.db.get_value("Tenant Deposit", deposits[0].name, "deposit_due")),
+			750,
+		)
+
+		second_bed = frappe.get_doc(
+			{
+				"doctype": "Bed",
+				"bed_number": "3",
+				"area": self.area.name,
+				"status": "Active",
+				"occupancy_status": "Vacant",
+			}
+		).insert()
+		no_deposit_tenant = make_tenant("No Deposit Tenant")
+		zero_allocation = make_allocation(
+			second_bed.name, no_deposit_tenant.name, monthly_rent=1200, deposit_amount=0
+		)
+		self.assertFalse(frappe.db.exists("Tenant Deposit", {"bed_allocation": zero_allocation.name}))
+
 	def test_property_user_cannot_open_another_users_tenant_or_allocation(self):
 		frappe.set_user("Administrator")
 		other = make_property_user("Other Landlord")

@@ -546,10 +546,20 @@ property_management.desk.render_operations = function (state) {
 			__("Deposits"),
 			__("No deposits in this filter."),
 			ops.deposits,
-			[__("Deposit"), __("Tenant"), __("Balance"), __("Received"), __("Refunded"), __("Transferred"), __("Status")],
+			[
+				__("Deposit"),
+				__("Tenant"),
+				__("Deposit Due"),
+				__("Balance"),
+				__("Received"),
+				__("Refunded"),
+				__("Transferred"),
+				__("Status"),
+			],
 			(row) => [
 				property_management.desk.doc_link("Tenant Deposit", row.name, row.name),
 				property_management.desk.esc(row.tenant_name || row.tenant || ""),
+				property_management.desk.money(row.deposit_due),
 				property_management.desk.money(row.balance),
 				property_management.desk.money(row.total_received),
 				property_management.desk.money(row.total_refunded),
@@ -1092,6 +1102,39 @@ property_management.desk.add_quick_fields = function (form, names) {
 	});
 };
 
+property_management.desk.save_and_submit_quick_entry = function (form, values) {
+	return new Promise((resolve) => {
+		form.update_doc(values);
+		frappe.call({
+			method: "frappe.client.save",
+			args: { doc: form.dialog.doc },
+			callback(r) {
+				if (!r || !r.message) {
+					form.dialog.working = false;
+					return;
+				}
+				frappe.call({
+					method: "frappe.client.submit",
+					args: { doc: r.message },
+					callback(submit_r) {
+						form.dialog.working = false;
+						if (submit_r && submit_r.message) {
+							form.process_after_insert(submit_r);
+							resolve(form.doc);
+						}
+					},
+					error() {
+						form.dialog.working = false;
+					},
+				});
+			},
+			error() {
+				form.dialog.working = false;
+			},
+		});
+	});
+};
+
 frappe.ui.form.BedAllocationQuickEntryForm = class BedAllocationQuickEntryForm extends (
 	frappe.ui.form.QuickEntryForm
 ) {
@@ -1144,15 +1187,13 @@ frappe.ui.form.RentPaymentQuickEntryForm = class RentPaymentQuickEntryForm exten
 								: __("The amount is more than the open invoices.")
 						);
 						me.dialog.working = false;
-						resolve();
 						return;
 					}
 					me.doc.allocations = rows;
-					frappe.ui.form.QuickEntryForm.prototype.insert.call(me, values).then(resolve);
+					property_management.desk.save_and_submit_quick_entry(me, values).then(resolve);
 				},
 				error() {
 					me.dialog.working = false;
-					resolve();
 				},
 			});
 		});
@@ -1180,6 +1221,10 @@ frappe.ui.form.DepositTransactionQuickEntryForm = class DepositTransactionQuickE
 			"remarks",
 		]);
 	}
+
+	insert(values) {
+		return property_management.desk.save_and_submit_quick_entry(this, values);
+	}
 };
 
 frappe.ui.form.PropertyExpenseQuickEntryForm = class PropertyExpenseQuickEntryForm extends (
@@ -1188,6 +1233,10 @@ frappe.ui.form.PropertyExpenseQuickEntryForm = class PropertyExpenseQuickEntryFo
 	set_meta_and_mandatory_fields() {
 		super.set_meta_and_mandatory_fields();
 		property_management.desk.add_quick_fields(this, ["flat", "area", "remarks"]);
+	}
+
+	insert(values) {
+		return property_management.desk.save_and_submit_quick_entry(this, values);
 	}
 };
 

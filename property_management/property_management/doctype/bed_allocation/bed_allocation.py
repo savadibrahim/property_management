@@ -49,8 +49,10 @@ class BedAllocation(OwnedDocument):
 		sync_bed_occupancy(self.bed)
 		refresh_tenant_status(self.tenant)
 		from property_management.billing import sync_monthly_revenue
+		from property_management.finance import sync_tenant_deposit
 
 		sync_monthly_revenue(self)
+		sync_tenant_deposit(self)
 
 	def on_trash(self):
 		frappe.throw(
